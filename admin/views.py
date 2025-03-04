@@ -1,13 +1,15 @@
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, request
 from flask_login import login_required
 from .models import BotStats, SearchQuery
-from sqlalchemy import func
+from sqlalchemy import func, distinct
 from datetime import datetime, timedelta
+from . import limiter
 
 admin_bp = Blueprint('admin', __name__)
 
 @admin_bp.route('/')
 @login_required
+@limiter.limit("60/minute")
 def dashboard():
     # Статистика за последние 24 часа
     last_24h = datetime.utcnow() - timedelta(hours=24)
@@ -39,17 +41,32 @@ def dashboard():
 
 @admin_bp.route('/users')
 @login_required
+@limiter.limit("60/minute")
 def users():
-    users = BotStats.query.with_entities(
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    
+    users_pagination = BotStats.query.with_entities(
         BotStats.user_id,
         func.count(BotStats.id).label('command_count'),
         func.max(BotStats.timestamp).label('last_activity')
-    ).group_by(BotStats.user_id).all()
+    ).group_by(BotStats.user_id).paginate(page=page, per_page=per_page)
     
-    return render_template('admin/users.html', users=users)
+    return render_template('admin/users.html', 
+                         users=users_pagination.items,
+                         pagination=users_pagination)
 
 @admin_bp.route('/searches')
 @login_required
+@limiter.limit("60/minute")
 def searches():
-    searches = SearchQuery.query.order_by(SearchQuery.timestamp.desc()).limit(100).all()
-    return render_template('admin/searches.html', searches=searches) 
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    
+    searches_pagination = SearchQuery.query.order_by(
+        SearchQuery.timestamp.desc()
+    ).paginate(page=page, per_page=per_page)
+    
+    return render_template('admin/searches.html',
+                         searches=searches_pagination.items,
+                         pagination=searches_pagination) 
