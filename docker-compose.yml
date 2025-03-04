@@ -7,5 +7,8 @@ services:
     restart: always
     env_file:
       - .env
+    ports:
+      - "5000:5000"
     volumes:
-      - ./logs:/app/logs 
+      - ./logs:/app/logs
+      - ./instance:/app/instance 
